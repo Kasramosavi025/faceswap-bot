@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: faceswap-bot
+    env: python
+    repo: https://github.com/kasramosavi025/faceswap-bot.git
+    buildCommand: |
+      apt-get update && apt-get install -y build-essential cmake libopenblas-dev liblapack-dev libx11-dev libgtk-3-dev
+      pip install -r requirements.txt
+    startCommand: "gunicorn -w 1 app:main --timeout 120"
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9
