@@ -3,11 +3,10 @@ import cv2
 import numpy as np
 import face_recognition
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from PIL import Image
+from telegram.ext import Application, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
 
-# Replace 'YOUR_BOT_TOKEN' with your actual bot token
+# Bot token directly added
 BOT_TOKEN = "8013238176:AAFIBhEUUiH8BwBMhi6DG7On_qKj00yCXKc"
 
 # Function to download files from Telegram
@@ -60,11 +59,11 @@ def swap_faces(image_path, video_path, output_path):
     return True, "Face swap completed."
 
 # Start command handler
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Hello! First send a photo of the face you want to swap, then send a video to swap the face into.")
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text("Hello! First send a photo of the face you want to swap, then send a video to swap the face into.")
 
 # Photo handler
-def photo_handler(update: Update, context: CallbackContext) -> None:
+async def photo_handler(update: Update, context: CallbackContext) -> None:
     user = update.message.from_user
     photo_file = update.message.photo[-1].get_file()
     photo_path = f"{user.id}_photo.jpg"
@@ -72,13 +71,13 @@ def photo_handler(update: Update, context: CallbackContext) -> None:
 
     # Save the photo path in user data for later use
     context.user_data['photo_path'] = photo_path
-    update.message.reply_text("Photo received! Now please send a video to swap the face into.")
+    await update.message.reply_text("Photo received! Now please send a video to swap the face into.")
 
 # Video handler
-def video_handler(update: Update, context: CallbackContext) -> None:
+async def video_handler(update: Update, context: CallbackContext) -> None:
     user = update.message.from_user
     if 'photo_path' not in context.user_data:
-        update.message.reply_text("Please send a photo first!")
+        await update.message.reply_text("Please send a photo first!")
         return
 
     video_file = update.message.video.get_file()
@@ -87,15 +86,15 @@ def video_handler(update: Update, context: CallbackContext) -> None:
     download_file(video_file.file_path, video_path)
 
     photo_path = context.user_data['photo_path']
-    update.message.reply_text("Processing your photo and video... Please wait.")
+    await update.message.reply_text("Processing your photo and video... Please wait.")
     
     success, message = swap_faces(photo_path, video_path, output_path)
     if not success:
-        update.message.reply_text(message)
+        await update.message.reply_text(message)
     else:
         # Send the result back to the user
         with open(output_path, 'rb') as video:
-            update.message.reply_video(video)
+            await update.message.reply_video(video)
 
     # Clean up
     os.remove(photo_path)
@@ -103,16 +102,25 @@ def video_handler(update: Update, context: CallbackContext) -> None:
     os.remove(output_path)
     context.user_data.pop('photo_path', None)
 
-def main() -> None:
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+# Initialize the bot
+application = Application.builder().token(BOT_TOKEN).build()
 
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.photo, photo_handler))
-    dispatcher.add_handler(MessageHandler(Filters.video, video_handler))
+# Add handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(Filters.photo, photo_handler))
+application.add_handler(MessageHandler(Filters.video, video_handler))
 
-    updater.start_polling()
-    updater.idle()
+# Start the bot in a separate thread
+import threading
+def run_bot():
+    application.run_polling()
 
-if __name__ == '__main__':
-    main()
+threading.Thread(target=run_bot, daemon=True).start()
+
+# Dummy endpoint for Render (to keep the service alive)
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Bot is running"}
